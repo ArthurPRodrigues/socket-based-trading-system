@@ -21,5 +21,5 @@ O sistema simula o fluxo de compra de dois ativos, integrando quatro processos i
 ## Integrantes
 
 - Arthur Paulo Rodrigues (23100747)
-- Adan Samuel Prüss (2410089)
+- Adan Samuel Prüss (24100890)
 - Roberto Gabriel Ferreira (23100739)
