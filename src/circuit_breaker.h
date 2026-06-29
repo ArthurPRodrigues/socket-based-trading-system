@@ -1,10 +1,13 @@
 #ifndef CIRCUIT_BREAKER_H
 #define CIRCUIT_BREAKER_H
 
+#define MAX_FAILURES 3
+#define RESET_TIMEOUT 5
+
 /* Inicializa todos os Circuit Breakers */
 void cb_init(void);
 
-/* Realiza uma chamada protegida pelo Circuit Breaker do tópico informado */
+/* Chamada protegida pelo Circuit Breaker */
 int circuit_breaker_call(
     const char *topico,
     const char *payload,
@@ -14,7 +17,7 @@ int circuit_breaker_call(
     int tam_resposta
 );
 
-/* Opcional: imprime o estado de todos os breakers (debug) */
+/* Exibe o estado atual de todos os breakers */
 void cb_print_status(void);
 
 #endif

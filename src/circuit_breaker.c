@@ -2,11 +2,8 @@
 #include <string.h>
 #include <time.h>
 
-#include "circuit_breaker.h"
 #include "broker_client.h"
-
-#define MAX_FAILURES 3
-#define RESET_TIMEOUT 5
+#include "circuit_breaker.h"
 
 #define BROKER_HOST "127.0.0.1"
 #define BROKER_PORT 8080
@@ -16,220 +13,211 @@ typedef enum
     CB_CLOSED,
     CB_OPEN,
     CB_HALF_OPEN
-
 } CBState;
 
 typedef struct
 {
     char topico[32];
-
-    CBState state;
-
-    int failures;
-
-    time_t last_failure;
-
+    CBState estado;
+    int falhas;
+    time_t instante_abertura;
 } CircuitBreaker;
-
-
-/*==========================================================
-    Um breaker para cada tópico
-==========================================================*/
 
 static CircuitBreaker breakers[] =
 {
-    {"cotacao",      CB_CLOSED,0,0},
-    {"risco",        CB_CLOSED,0,0},
-    {"compra",       CB_CLOSED,0,0},
-    {"compensacao",  CB_CLOSED,0,0}
+    {"cotacao",     CB_CLOSED, 0, 0},
+    {"risco",       CB_CLOSED, 0, 0},
+    {"compra",      CB_CLOSED, 0, 0},
+    {"compensacao", CB_CLOSED, 0, 0}
 };
 
-#define NUM_BREAKERS (sizeof(breakers)/sizeof(CircuitBreaker))
+#define NUM_BREAKERS (sizeof(breakers) / sizeof(breakers[0]))
 
-/*==========================================================
-    Procura o breaker do tópico
-==========================================================*/
+static CircuitBreaker* obter_breaker(const char *topico);
+static const char* estado_para_texto(CBState estado);
+static void imprimir_breaker(const CircuitBreaker *cb);
 
 static CircuitBreaker* obter_breaker(const char *topico)
 {
-    int i;
+    size_t i;
 
-    for(i=0;i<NUM_BREAKERS;i++)
+    if (topico == NULL)
+        return NULL;
+
+    for (i = 0; i < NUM_BREAKERS; i++)
     {
-        if(strcmp(breakers[i].topico,topico)==0)
+        if (strcmp(breakers[i].topico, topico) == 0)
             return &breakers[i];
     }
 
     return NULL;
 }
 
-/*==========================================================
-    Inicialização
-==========================================================*/
+static const char* estado_para_texto(CBState estado)
+{
+    switch (estado)
+    {
+        case CB_CLOSED:    return "CLOSED";
+        case CB_OPEN:      return "OPEN";
+        case CB_HALF_OPEN: return "HALF_OPEN";
+        default:           return "UNKNOWN";
+    }
+}
 
+static void imprimir_breaker(const CircuitBreaker *cb)
+{
+    if (cb == NULL)
+        return;
+
+    printf("Topico: %-12s | Estado: %-9s | Falhas: %d",
+           cb->topico,
+           estado_para_texto(cb->estado),
+           cb->falhas);
+
+    if (cb->estado == CB_OPEN)
+    {
+        time_t agora = time(NULL);
+        int restante = RESET_TIMEOUT - (int)difftime(agora, cb->instante_abertura);
+
+        if (restante < 0)
+            restante = 0;
+
+        printf(" | Reset em: %ds", restante);
+    }
+
+    printf("\n");
+}
+
+/* Inicializa todos os Circuit Breakers */
 void cb_init(void)
 {
-    int i;
+    size_t i;
 
-    for(i=0;i<NUM_BREAKERS;i++)
+    for (i = 0; i < NUM_BREAKERS; i++)
     {
-        breakers[i].state = CB_CLOSED;
-        breakers[i].failures = 0;
-        breakers[i].last_failure = 0;
+        breakers[i].estado = CB_CLOSED;
+        breakers[i].falhas = 0;
+        breakers[i].instante_abertura = 0;
     }
 }
 
-/*==========================================================
-    Apenas para debug
-==========================================================*/
-
-static const char* nome_estado(CBState estado)
-{
-    switch(estado)
-    {
-        case CB_CLOSED:
-            return "CLOSED";
-
-        case CB_OPEN:
-            return "OPEN";
-
-        case CB_HALF_OPEN:
-            return "HALF_OPEN";
-    }
-
-    return "DESCONHECIDO";
-}
-
-/*==========================================================
-    Circuit Breaker
-==========================================================*/
-
+/* Chamada protegida pelo Circuit Breaker */
 int circuit_breaker_call(
-        const char *topico,
-        const char *payload,
-        int ttl_restante_ms,
-        int id_ordem,
-        char *resposta,
-        int tam_resposta)
+    const char *topico,
+    const char *payload,
+    int ttl_restante_ms,
+    int id_ordem,
+    char *resposta,
+    int tam_resposta
+)
 {
+    CircuitBreaker *cb;
+    Prioridade prioridade;
+    time_t agora;
+    int rc;
 
-    CircuitBreaker *cb = obter_breaker(topico);
+    if (resposta != NULL && tam_resposta > 0)
+        resposta[0] = '\0';
 
-    if(cb == NULL)
+    if (topico == NULL || payload == NULL || resposta == NULL || tam_resposta <= 0)
+        return -1;
+
+    cb = obter_breaker(topico);
+    if (cb == NULL)
     {
-        strcpy(resposta,"ERR:TOPICO_INVALIDO");
+        snprintf(resposta, tam_resposta, "ERR:topico desconhecido");
         return -1;
     }
 
-    printf("\n=============================\n");
-    printf("TOPICO: %s\n", cb->topico);
-    printf("ESTADO: %s\n", nome_estado(cb->state));
-    printf("=============================\n");
-
-    /*--------------------------------------------
-        Estado OPEN
-    --------------------------------------------*/
-
-    if(cb->state == CB_OPEN)
+    if (ttl_restante_ms <= 0)
     {
-        time_t agora = time(NULL);
+        snprintf(resposta, tam_resposta, "ERR:ttl expirado");
+        return -1;
+    }
 
-        if((agora - cb->last_failure) >= RESET_TIMEOUT)
+    agora = time(NULL);
+
+    if (cb->estado == CB_OPEN)
+    {
+        double tempo_fechado = difftime(agora, cb->instante_abertura);
+
+        if (tempo_fechado >= RESET_TIMEOUT)
         {
-            printf("[CB] Timeout expirou.\n");
-            printf("[CB] OPEN -> HALF_OPEN\n");
-
-            cb->state = CB_HALF_OPEN;
+            cb->estado = CB_HALF_OPEN;
         }
         else
         {
-            printf("[CB] Requisição bloqueada.\n");
+            int restante = RESET_TIMEOUT - (int)tempo_fechado;
+            if (restante < 0)
+                restante = 0;
 
-            strcpy(resposta,"ERR:CIRCUIT_OPEN");
-
+            snprintf(resposta, tam_resposta,
+                     "ERR:circuit breaker aberto para '%s' (%ds para retry)",
+                     topico, restante);
             return -1;
         }
     }
 
-    /*--------------------------------------------
-        Envia ao Broker
-    --------------------------------------------*/
+    prioridade = broker_topico_para_prioridade(topico);
 
-    int status = broker_publish(
-            BROKER_HOST,
-            BROKER_PORT,
-            topico,
-            broker_topico_para_prioridade(topico),
-            ttl_restante_ms,
-            id_ordem,
-            payload,
-            resposta,
-            tam_resposta
+    rc = broker_publish(
+        BROKER_HOST,
+        BROKER_PORT,
+        topico,
+        prioridade,
+        ttl_restante_ms,
+        id_ordem,
+        payload,
+        resposta,
+        tam_resposta
     );
 
-    /*--------------------------------------------
-        SUCESSO
-    --------------------------------------------*/
-
-    if(status == 0)
+    if (rc == 0)
     {
-        printf("[CB] Sucesso.\n");
-
-        if(cb->state == CB_HALF_OPEN)
-        {
-            printf("[CB] HALF_OPEN -> CLOSED\n");
-        }
-
-        cb->state = CB_CLOSED;
-        cb->failures = 0;
-
+        cb->falhas = 0;
+        cb->estado = CB_CLOSED;
+        cb->instante_abertura = 0;
         return 0;
     }
 
-    /*--------------------------------------------
-        FALHA
-    --------------------------------------------*/
-
-    cb->failures++;
-
-    printf("[CB] Falha %d/%d\n",
-           cb->failures,
-           MAX_FAILURES);
-
-    if(cb->state == CB_HALF_OPEN)
+    if (resposta[0] == '\0')
     {
-        printf("[CB] HALF_OPEN -> OPEN\n");
+        snprintf(resposta, tam_resposta,
+                 "ERR:falha ao comunicar com broker");
+    }
 
-        cb->state = CB_OPEN;
-        cb->last_failure = time(NULL);
-
+    if (cb->estado == CB_HALF_OPEN)
+    {
+        cb->estado = CB_OPEN;
+        cb->falhas = MAX_FAILURES;
+        cb->instante_abertura = agora;
         return -1;
     }
 
-    if(cb->failures >= MAX_FAILURES)
-    {
-        printf("[CB] CLOSED -> OPEN\n");
+    cb->falhas++;
 
-        cb->state = CB_OPEN;
-        cb->last_failure = time(NULL);
+    if (cb->falhas >= MAX_FAILURES)
+    {
+        cb->estado = CB_OPEN;
+        cb->instante_abertura = agora;
+    }
+    else
+    {
+        cb->estado = CB_CLOSED;
     }
 
     return -1;
 }
 
+/* Exibe o estado atual de todos os breakers */
 void cb_print_status(void)
 {
-    int i;
+    size_t i;
 
-    printf("\n=========== CIRCUIT BREAKERS ===========\n");
-
-    for(i = 0; i < NUM_BREAKERS; i++)
+    printf("\n=== STATUS DOS CIRCUIT BREAKERS ===\n");
+    for (i = 0; i < NUM_BREAKERS; i++)
     {
-        printf("%-15s | %-10s | Falhas: %d\n",
-               breakers[i].topico,
-               nome_estado(breakers[i].state),
-               breakers[i].failures);
+        imprimir_breaker(&breakers[i]);
     }
-
-    printf("========================================\n");
+    printf("===================================\n");
 }
