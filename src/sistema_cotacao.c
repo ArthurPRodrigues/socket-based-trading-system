@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 
@@ -10,12 +11,17 @@
 
 int main(int argc, char *argv[])
 {
-    int sleep_ms = 0;
+    int sleep_ms    = 0;
+    int taxa_sucesso = 100;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--sleep-ms") == 0 && i + 1 < argc)
             sleep_ms = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--taxa-sucesso") == 0 && i + 1 < argc)
+            taxa_sucesso = atoi(argv[++i]);
     }
+
+    srand((unsigned)time(NULL));
 
     int server_fd, client_fd;
 
@@ -87,6 +93,12 @@ int main(int argc, char *argv[])
 
         if (sleep_ms > 0)
             usleep(sleep_ms * 1000);
+
+        if ((rand() % 100) >= taxa_sucesso) {
+            printf("[COTACAO] Falha simulada (taxa=%d%%).\n", taxa_sucesso);
+            close(client_fd);
+            continue;
+        }
 
         char resposta[BUFFER];
 
