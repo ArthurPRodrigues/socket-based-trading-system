@@ -19,6 +19,7 @@ void executar_saga_trading(const char *ativo1, const char *ativo2, int ttl_max_m
     char buffer_resposta[256];
     int ttl_restante_ms;
 
+    //inicia o circuit breaker
     cb_init();
 
     srand(time(NULL));
@@ -26,9 +27,7 @@ void executar_saga_trading(const char *ativo1, const char *ativo2, int ttl_max_m
 
     printf("\n⚡ [SAGA %d] Iniciando ordem para %s e %s...\n", id_ordem, ativo1, ativo2);
 
-    // ==========================================
     // PASSO 1: SISTEMA DE COTAÇÃO
-    // ==========================================
     ttl_restante_ms = ttl_max_ms - (int)(obter_tempo_ms() - tempo_inicio);
     if (ttl_restante_ms <= 0) {
         printf("❌ [ABORTADO] TTL excedido antes da Cotação.\n");
@@ -43,9 +42,7 @@ void executar_saga_trading(const char *ativo1, const char *ativo2, int ttl_max_m
     }
     printf("✅ [1/4] Cotação recebida: %s\n", buffer_resposta);
 
-    // ==========================================
     // PASSO 2: SISTEMA DE RISCO
-    // ==========================================
     ttl_restante_ms = ttl_max_ms - (int)(obter_tempo_ms() - tempo_inicio);
     if (ttl_restante_ms <= 0) {
         printf("❌ [ABORTADO] TTL excedido antes do Risco.\n");
@@ -61,9 +58,7 @@ void executar_saga_trading(const char *ativo1, const char *ativo2, int ttl_max_m
     }
     printf("✅ [2/4] Risco Aprovado.\n");
 
-    // ==========================================
     // PASSO 3: COMPRA DO ATIVO 1
-    // ==========================================
     ttl_restante_ms = ttl_max_ms - (int)(obter_tempo_ms() - tempo_inicio);
     if (ttl_restante_ms <= 0) {
         printf("[ABORTADO] TTL excedido antes de comprar o Ativo 1.\n");
@@ -81,9 +76,7 @@ void executar_saga_trading(const char *ativo1, const char *ativo2, int ttl_max_m
         return;
     }
 
-    // ==========================================
     // PASSO 4: COMPRA DO ATIVO 2
-    // ==========================================
     ttl_restante_ms = ttl_max_ms - (int)(obter_tempo_ms() - tempo_inicio);
     if (ttl_restante_ms <= 0) {
         printf("[FALHA] TTL excedido antes do Ativo 2! Iniciando Rollback...\n");
@@ -100,12 +93,10 @@ void executar_saga_trading(const char *ativo1, const char *ativo2, int ttl_max_m
         printf("[FALHA] Erro na compra do Ativo 2! Iniciando Rollback...\n");
     }
 
-// ==========================================
 // TRANSAÇÃO DE COMPENSAÇÃO (ROLLBACK)
-// ==========================================
 compensacao:
     if (ativo1_comprado) {
-        /* compensação usa ttl_max_ms fresco: o rollback deve ocorrer independente do TTL da cotação */
+        /* compensação usa ttl_max_ms, o rollback deve ocorrer independente do TTL da cotação */
         sprintf(buffer_envio, "ID:%d;CMD:DESFAZER;ATIVO:%s", id_ordem, ativo1);
         circuit_breaker_call("compensacao", buffer_envio, ttl_max_ms, id_ordem,
                              buffer_resposta, sizeof(buffer_resposta));
