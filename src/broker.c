@@ -199,10 +199,16 @@ static void *worker(void *arg) {
     for (;;) {
         Mensagem *m = broker_dequeue();
 
-        broker_route(m);
+        int resultado = broker_route(m);
 
         char saida[MAX_RESPOSTA + 8];
-        snprintf(saida, sizeof(saida), "OK:%s\n", m->resposta);
+        if (resultado == 0 && strncmp(m->resposta, "ERR:", 4) != 0) {
+            snprintf(saida, sizeof(saida), "OK:%s\n", m->resposta);
+        } else if (strncmp(m->resposta, "ERR:", 4) == 0) {
+            snprintf(saida, sizeof(saida), "%s\n", m->resposta);
+        } else {
+            snprintf(saida, sizeof(saida), "ERR:%s\n", m->resposta);
+        }
         send(m->fd_publisher, saida, strlen(saida), 0);
         close(m->fd_publisher);
 
