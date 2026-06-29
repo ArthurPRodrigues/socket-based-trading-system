@@ -8,8 +8,15 @@
 #define PORTA 8081
 #define BUFFER 512
 
-int main()
+int main(int argc, char *argv[])
 {
+    int sleep_ms = 0;
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--sleep-ms") == 0 && i + 1 < argc)
+            sleep_ms = atoi(argv[++i]);
+    }
+
     int server_fd, client_fd;
 
     struct sockaddr_in servidor;
@@ -78,7 +85,8 @@ int main()
 
         printf("\n[COTACAO] Recebido:\n%s\n",buffer);
 
-        /* Simulação das cotações */
+        if (sleep_ms > 0)
+            usleep(sleep_ms * 1000);
 
         char resposta[BUFFER];
 

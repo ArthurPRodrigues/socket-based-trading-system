@@ -9,8 +9,20 @@
 #define PORTA 8082
 #define BUFFER 512
 
-int main()
+int main(int argc, char *argv[])
 {
+    int taxa_sucesso = 80;
+    int sleep_ms = 0;
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--taxa-sucesso") == 0 && i + 1 < argc)
+            taxa_sucesso = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--sleep-ms") == 0 && i + 1 < argc)
+            sleep_ms = atoi(argv[++i]);
+    }
+
+    srand(42);
+
     int server_fd, client_fd;
 
     struct sockaddr_in servidor;
@@ -80,9 +92,10 @@ int main()
 
         printf("\n[RISCO] Requisição recebida:\n%s\n",buffer);
 
-        /* Simulação da análise */
+        if (sleep_ms > 0)
+            usleep(sleep_ms * 1000);
 
-        int aprovado = (rand()%100) < 80;
+        int aprovado = (rand() % 100) < taxa_sucesso;
 
         if(aprovado)
         {

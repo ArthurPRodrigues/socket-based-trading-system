@@ -9,8 +9,23 @@
 #define PORTA 8083
 #define BUFFER 512
 
-int main()
+int main(int argc, char *argv[])
 {
+    int taxa_sucesso = 100;
+    int sleep_ms = 0;
+    int fail_on = -1; /* -1 = nunca forçar falha */
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--taxa-sucesso") == 0 && i + 1 < argc)
+            taxa_sucesso = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--sleep-ms") == 0 && i + 1 < argc)
+            sleep_ms = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--fail-on") == 0 && i + 1 < argc)
+            fail_on = atoi(argv[++i]);
+    }
+
+    int contador_compras = 0;
+
     int server_fd, client_fd;
 
     struct sockaddr_in servidor;
@@ -82,12 +97,24 @@ int main()
 
         if(strstr(buffer,"CMD:COMPRAR") != NULL)
         {
-            printf("[COMPRAS] Compra executada.\n");
+            if (sleep_ms > 0)
+                usleep(sleep_ms * 1000);
 
-            send(client_fd,
-                 "SUCESSO",
-                 strlen("SUCESSO"),
-                 0);
+            contador_compras++;
+            int sucesso = (fail_on > 0 && contador_compras == fail_on)
+                          ? 0
+                          : (rand() % 100) < taxa_sucesso;
+
+            if (sucesso)
+            {
+                printf("[COMPRAS] Compra executada (chamada #%d).\n", contador_compras);
+                send(client_fd, "SUCESSO", strlen("SUCESSO"), 0);
+            }
+            else
+            {
+                printf("[COMPRAS] Compra FALHOU (chamada #%d).\n", contador_compras);
+                send(client_fd, "FALHA", strlen("FALHA"), 0);
+            }
         }
         else if(strstr(buffer,"CMD:DESFAZER") != NULL)
         {
