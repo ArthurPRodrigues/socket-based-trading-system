@@ -30,22 +30,22 @@ void executar_saga_trading(const char *ativo1, const char *ativo2, int ttl_max_m
     // PASSO 1: SISTEMA DE COTAÇÃO
     ttl_restante_ms = ttl_max_ms - (int)(obter_tempo_ms() - tempo_inicio);
     if (ttl_restante_ms <= 0) {
-        printf("❌ [ABORTADO] TTL excedido antes da Cotação.\n");
+        printf("[ABORTADO] TTL excedido antes da Cotação.\n");
         return;
     }
 
     sprintf(buffer_envio, "ID:%d;CMD:COTAR;ATIVOS:%s,%s", id_ordem, ativo1, ativo2);
     if (circuit_breaker_call("cotacao", buffer_envio, ttl_restante_ms, id_ordem,
                              buffer_resposta, sizeof(buffer_resposta)) != 0) {
-        printf("❌ [ABORTADO] Falha na Cotação: %s\n", buffer_resposta);
+        printf("[ABORTADO] Falha na Cotação: %s\n", buffer_resposta);
         return;
     }
-    printf("✅ [1/4] Cotação recebida: %s\n", buffer_resposta);
+    printf("[1/4] Cotação recebida: %s\n", buffer_resposta);
 
     // PASSO 2: SISTEMA DE RISCO
     ttl_restante_ms = ttl_max_ms - (int)(obter_tempo_ms() - tempo_inicio);
     if (ttl_restante_ms <= 0) {
-        printf("❌ [ABORTADO] TTL excedido antes do Risco.\n");
+        printf("[ABORTADO] TTL excedido antes do Risco.\n");
         return;
     }
 
@@ -53,10 +53,10 @@ void executar_saga_trading(const char *ativo1, const char *ativo2, int ttl_max_m
     if (circuit_breaker_call("risco", buffer_envio, ttl_restante_ms, id_ordem,
                              buffer_resposta, sizeof(buffer_resposta)) != 0 ||
         strcmp(buffer_resposta, "APROVADO") != 0) {
-        printf("❌ [ABORTADO] Operação reprovada pelo Risco: %s\n", buffer_resposta);
+        printf("[ABORTADO] Operação reprovada pelo Risco: %s\n", buffer_resposta);
         return;
     }
-    printf("✅ [2/4] Risco Aprovado.\n");
+    printf("[2/4] Risco Aprovado.\n");
 
     // PASSO 3: COMPRA DO ATIVO 1
     ttl_restante_ms = ttl_max_ms - (int)(obter_tempo_ms() - tempo_inicio);
