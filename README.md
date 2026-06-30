@@ -20,9 +20,9 @@ O sistema simula o fluxo de compra de dois ativos, integrando quatro processos i
 
 ## Integrantes
 
-- Arthur Paulo Rodrigues (23100747)
-- Adan Samuel Prüss (24100890)
-- Roberto Gabriel Ferreira (23100739)
+- Arthur Paulo Rodrigues (23100747) (Saga)
+- Adan Samuel Prüss (24100890) (Circuit Breaker e parte dos sistemas)
+- Roberto Gabriel Ferreira (23100739) (Pub/Sub - Broker MQ e parte dos sistemas)
 
 # Instruções de compilação e execução
 
