@@ -42,7 +42,23 @@ Todos os comandos devem ser executados dentro do diretório `src/`.
 cd src/
 ```
 
-### Serviços
+### Com Make (recomendado)
+
+Compila todos os binários de uma vez:
+
+```bash
+make
+```
+
+Para limpar os binários gerados:
+
+```bash
+make clean
+```
+
+### Manualmente
+
+#### Serviços
 
 ```bash
 gcc -o broker          broker.c          -lpthread
@@ -51,13 +67,13 @@ gcc -o sistema_risco   sistema_risco.c
 gcc -o sistema_compras sistema_compras.c
 ```
 
-### Orquestrador (teste automatizado)
+#### Orquestrador (teste automatizado)
 
 ```bash
 gcc -o teste_e2e teste_e2e.c saga.c circuit_breaker.c broker_client.c
 ```
 
-### Simulador interativo
+#### Simulador interativo
 
 ```bash
 gcc -o simulador simulador.c saga.c circuit_breaker.c broker_client.c
